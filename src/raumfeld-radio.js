@@ -2,7 +2,7 @@
 var RaumkernelLib = require("node-raumkernel");
 var path = require("path");
 
-var PLUGIN_NAME = "homebridge-independent-platform-example";
+var PLUGIN_NAME = "homebridge-raumfeld-radio";
 var PLATFORM_NAME = "RaumfeldRadioPlatform";
 
 var hap;
