@@ -1,0 +1,30 @@
+{
+  "name": "homebridge-raumfeld-radio",
+  "version": "0.1.0",
+  "description": "Radio Stations for your Raumfeld Connector",
+  "main": "src/raumfeld-radio.js",
+  "author": "Max Bothe <mathebox@gmail.com>",
+  "engines": {
+    "homebridge": ">=1.0.0"
+  },
+  "keywords": [
+    "homebridge-plugin"
+  ],
+  "license": "ISC",
+  "files": [
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/mathebox/homebridge-raumfeld-radio.git"
+  },
+  "bugs": {
+    "url": "http://github.com/mathebox/homebridge-raumfeld-radio/issues"
+  },
+  "dependencies": {
+    "node-raumkernel": "^1.2.22"
+  },
+  "devDependencies": {
+    "homebridge": "^1.0.4"
+  }
+}
