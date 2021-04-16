@@ -9,7 +9,7 @@
         {
             "platform" : "RaumfeldRadioPlatform",
             "name" : "Teufel",
-            "zoneName": "Living Room",
+            "hostIP": "0.0.0.0",
             "stations": [
                 {
                     "name": "RadioEins",
