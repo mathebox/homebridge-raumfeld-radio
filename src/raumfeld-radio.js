@@ -95,7 +95,8 @@ RaumfeldRadioPlatform.prototype = {
         var self = this;
         var virtualMediaRenderer = this.virtualMediaRenderer;
         return virtualMediaRenderer.getMediaInfo().then(data => {
-            var stationStatus = data.CurrentURI == station.streamURL && self.powerState() == "ACTIVE";
+            var isPlayingViaApp = data.CurrentURIMetaData.includes("id=" + station.ebrowseID);
+            var stationStatus = (data.CurrentURI == station.streamURL || isPlayingViaApp) && self.powerState() == "ACTIVE";
             return stationStatus
         });
     },
