@@ -38,19 +38,21 @@ function RaumfeldRadioPlatform(log, config, api) {
 
     this.api.on('didFinishLaunching', () => {
         self.raumkernel.on("systemReady", () => {
-            self.connectToRoom().then(roomName => {
-                self.roomName = roomName;
-                self.stations.forEach((station) => {
-                    self.publishAccessory(station.name);
-                });
-            }).catch(error => self.log.warn(error));
+            self.stations.forEach((station) => {
+                self.publishAccessory(station.name);
+            });
+        });
+
+        self.raumkernel.on("mediaRendererRaumfeldVirtualRemoved", () => {
+            self.log.info("Turn off all stations");
+            self.updateHandlers.forEach(handler => handler(undefined));
         });
     })    
 }
 
 RaumfeldRadioPlatform.prototype = {
 
-    connectToRoom: function() {
+    connectToRoomIfNeeded: function() {
         var zoneConfiguration = this.raumkernel.managerDisposer.zoneManager.zoneConfiguration;
 
         if (zoneConfiguration == null) {
@@ -62,13 +64,16 @@ RaumfeldRadioPlatform.prototype = {
         }
 
         if (zoneConfiguration.zoneConfig.unassignedRooms !== undefined) {
-            var room = zoneConfiguration.zoneConfig.unassignedRooms[0].room[0].$
+            var room = zoneConfiguration.zoneConfig.unassignedRooms[0].room[0].$;
+            this.roomName = room.name;
             this.log.info("Found and use unassigned room:", room.name);
-            return this.raumkernel.managerDisposer.zoneManager.connectRoomToZone(room.udn, " ").then(() => {
+            return this.raumkernel.managerDisposer.zoneManager.connectRoomToZone(room.udn, "").then(() => {
                 return Promise.resolve(room.name);
-            });
+            })
+            .then(x => new Promise(resolve => setTimeout(resolve, 2000, x))); // delay
         } else {
             var room = zoneConfiguration.zoneConfig.zones[0].zone[0].room[0].$;
+            this.roomName = room.name;
             this.log.info("Use already assigned room:", room.name);
             return Promise.resolve(room.name);
         }
@@ -82,21 +87,42 @@ RaumfeldRadioPlatform.prototype = {
         return this.raumkernel.managerDisposer.deviceManager.getMediaRenderer(this.roomName);
     },
 
+    get['connectedToZone']() {
+        var zoneConfiguration = this.raumkernel.managerDisposer.zoneManager.zoneConfiguration;
+        var connected = zoneConfiguration.zoneConfig.unassignedRooms === undefined;
+
+        if (connected) {
+            this.roomName = zoneConfiguration.zoneConfig.zones[0].zone[0].$.udn;
+        }
+
+        return connected;
+    },
+
+    get['powerStateOn']() {
+        var zoneConfiguration = this.raumkernel.managerDisposer.zoneManager.zoneConfiguration;
+        var powerState = zoneConfiguration.zoneConfig.zones[0].zone[0].room[0].$.powerState;
+        return powerState == "ACTIVE";
+    },
+
     station: function(name) {
         return this.stations.filter(station => station.name === name)[0];
     },
 
-    powerState: function() {
-        var zoneConfiguration = this.raumkernel.managerDisposer.zoneManager.zoneConfiguration;
-        return zoneConfiguration.zoneConfig.zones[0].zone[0].room[0].$.powerState;
-    },
-
     stationStatus: function(station) { 
-        var self = this;
+        if (!this.connectedToZone) {
+            this.log.warn("not connected to zone")
+            return Promise.resolve(false);
+        }
+
+        if (!this.powerStateOn) {
+            this.log.warn("not powered on")
+            return Promise.resolve(false);
+        }
+
         var virtualMediaRenderer = this.virtualMediaRenderer;
         return virtualMediaRenderer.getMediaInfo().then(data => {
             var isPlayingViaApp = data.CurrentURIMetaData.includes("id=" + station.ebrowseID);
-            var stationStatus = (data.CurrentURI == station.streamURL || isPlayingViaApp) && self.powerState() == "ACTIVE";
+            var stationStatus = (data.CurrentURI == station.streamURL || isPlayingViaApp);
             return stationStatus
         });
     },
@@ -117,25 +143,28 @@ RaumfeldRadioPlatform.prototype = {
             })
             .on("set", (value, callback) => {
                 if (value) {
-                    if (self.powerState() == "ACTIVE") {
-                        self.log.info("Change to new station URI for", station.name);
-                        self.setStream(station.streamURL).then(() => {
-                            callback();
-                            self.log.info("Changed station URI");
-                        });
-                    } else {
-                        self.log.info("Turn on connector");
-                        this.mediaRenderer.leaveStandby()
-                        .then(x => new Promise(resolve => setTimeout(resolve, 3000, x))) // delay
-                        .then((_data) => {
+                    self.connectToRoomIfNeeded()
+                    .then(x => {
+                        if (self.powerStateOn) {
                             self.log.info("Change to new station URI for", station.name);
-                            return self.setStream(station.streamURL);
-                        })
-                        .then(() => {
-                            callback();
-                            self.log.info("Changed station URI");
-                        }).catch(error => self.log.warn(error));
-                    }
+                            self.setStream(station.streamURL).then(() => {
+                                callback();
+                                self.log.info("Changed station URI");
+                            });
+                        } else {
+                            self.log.info("Turn on connector");
+                            this.mediaRenderer.leaveStandby()
+                            .then(x => new Promise(resolve => setTimeout(resolve, 3000, x))) // delay
+                            .then((_data) => {
+                                self.log.info("Change to new station URI for", station.name);
+                                return self.setStream(station.streamURL);
+                            })
+                            .then(() => {
+                                callback();
+                                self.log.info("Changed station URI");
+                            }).catch(error => self.log.warn(error));
+                        }
+                    })
                 } else {
                     callback();
                 }
@@ -155,11 +184,15 @@ RaumfeldRadioPlatform.prototype = {
     },
 
     onChangeHandler: function(newName, newValue) {
+        var self = this;
+
         if (newValue) {
             this.updateHandlers.forEach(handler => handler(newName));
         } else {
-            this.log.info("Turn off connector");
-            this.mediaRenderer.enterManualStandby();
+            this.connectToRoomIfNeeded().then(() => {
+                self.log.info("Turn off connector");
+                self.mediaRenderer.enterManualStandby();
+            });
         }
     },
 
