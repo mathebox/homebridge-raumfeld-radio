@@ -110,12 +110,12 @@ RaumfeldRadioPlatform.prototype = {
 
     stationStatus: function(station) { 
         if (!this.connectedToZone) {
-            this.log.warn("not connected to zone")
+            this.log.debug(`Fialing status for station '${station}': Not connected to zone`)
             return Promise.resolve(false);
         }
 
         if (!this.powerStateOn) {
-            this.log.warn("not powered on")
+            this.log.debug(`Failing status for station '${station}': Connector not powered on`)
             return Promise.resolve(false);
         }
 
