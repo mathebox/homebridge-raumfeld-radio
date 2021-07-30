@@ -34,7 +34,7 @@ function RaumfeldRadioPlatform(log, config, api) {
     this.raumkernel.settings.uriMetaDataTemplateFile = path.resolve(__dirname, "../node_modules/node-raumkernel/lib/setUriMetadata.template");
     this.raumkernel.init();
 
-    log.info("Raumfeld radio platform finished initializing!");
+    log.debug("Raumfeld radio platform finished initializing!");
 
     this.api.on('didFinishLaunching', () => {
         self.raumkernel.on("systemReady", () => {
@@ -44,7 +44,7 @@ function RaumfeldRadioPlatform(log, config, api) {
         });
 
         self.raumkernel.on("mediaRendererRaumfeldVirtualRemoved", () => {
-            self.log.info("Turn off all stations");
+            self.log.debug("Turn off all stations");
             self.updateHandlers.forEach(handler => handler(undefined));
         });
     })    
@@ -66,7 +66,7 @@ RaumfeldRadioPlatform.prototype = {
         if (zoneConfiguration.zoneConfig.unassignedRooms !== undefined) {
             var room = zoneConfiguration.zoneConfig.unassignedRooms[0].room[0].$;
             this.roomName = room.name;
-            this.log.info("Found and use unassigned room:", room.name);
+            this.log.debug("Found and use unassigned room:", room.name);
             return this.raumkernel.managerDisposer.zoneManager.connectRoomToZone(room.udn, "").then(() => {
                 return Promise.resolve(room.name);
             })
@@ -74,7 +74,7 @@ RaumfeldRadioPlatform.prototype = {
         } else {
             var room = zoneConfiguration.zoneConfig.zones[0].zone[0].room[0].$;
             this.roomName = room.name;
-            this.log.info("Use already assigned room:", room.name);
+            this.log.debug("Use already assigned room:", room.name);
             return Promise.resolve(room.name);
         }
     },
@@ -146,22 +146,22 @@ RaumfeldRadioPlatform.prototype = {
                     self.connectToRoomIfNeeded()
                     .then(x => {
                         if (self.powerStateOn) {
-                            self.log.info("Change to new station URI for", station.name);
+                            self.log.debug("Change to new station URI for", station.name);
                             self.setStream(station.streamURL).then(() => {
                                 callback();
-                                self.log.info("Changed station URI");
+                                self.log.debug("Changed station URI");
                             });
                         } else {
-                            self.log.info("Turn on connector");
+                            self.log.debug("Turn on connector");
                             this.mediaRenderer.leaveStandby()
                             .then(x => new Promise(resolve => setTimeout(resolve, 3000, x))) // delay
                             .then((_data) => {
-                                self.log.info("Change to new station URI for", station.name);
+                                self.log.debug("Change to new station URI for", station.name);
                                 return self.setStream(station.streamURL);
                             })
                             .then(() => {
                                 callback();
-                                self.log.info("Changed station URI");
+                                self.log.debug("Changed station URI");
                             }).catch(error => self.log.warn(error));
                         }
                     })
@@ -190,7 +190,7 @@ RaumfeldRadioPlatform.prototype = {
             this.updateHandlers.forEach(handler => handler(newName));
         } else {
             this.connectToRoomIfNeeded().then(() => {
-                self.log.info("Turn off connector");
+                self.log.debug("Turn off connector");
                 self.mediaRenderer.enterManualStandby();
             });
         }
