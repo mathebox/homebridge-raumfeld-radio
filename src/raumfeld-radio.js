@@ -29,7 +29,7 @@ function RaumfeldRadioPlatform(log, config, api) {
     var self = this;
 
     // Initializing Raumfeld kernel
-    this.raumkernel.createLogger(1, "log");
+    this.raumkernel.createLogger(1, path.resolve(__dirname, "../logs"));
     this.raumkernel.settings.raumfeldHost = config["hostIP"];
     this.raumkernel.settings.uriMetaDataTemplateFile = path.resolve(__dirname, "../node_modules/node-raumkernel/lib/setUriMetadata.template");
     this.raumkernel.init();
