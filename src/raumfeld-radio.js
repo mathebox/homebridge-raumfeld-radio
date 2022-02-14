@@ -3,7 +3,7 @@ var RaumkernelLib = require("node-raumkernel");
 var path = require("path");
 
 var PLUGIN_NAME = "homebridge-raumfeld-radio";
-var PLATFORM_NAME = "RaumfeldRadioPlatform";
+var PLATFORM_NAME = "RaumfeldRadio";
 
 var hap;
 var Accessory;
@@ -18,7 +18,7 @@ function RaumfeldRadioPlatform(log, config, api) {
     this.log = log;
     this.api = api;
 
-    this.roomName = undefined;
+    this.zoneUDN = undefined;
 
     this.raumkernel = new RaumkernelLib.Raumkernel();
     this.stations = config["stations"];
@@ -38,9 +38,17 @@ function RaumfeldRadioPlatform(log, config, api) {
 
     this.api.on('didFinishLaunching', () => {
         self.raumkernel.on("systemReady", () => {
-            self.stations.forEach((station) => {
-                self.publishAccessory(station.name);
+
+            var zoneConfiguration = self.raumkernel.managerDisposer.zoneManager.zoneConfiguration;
+            var rooms = zoneConfiguration.zoneConfig.zones[0].zone[0].room;
+
+            rooms.forEach(room => {
+                self.stations.forEach(station => {
+                    self.publishAccessory(room, station.name);
+                });
             });
+
+            // TODO: unassigned rooms (test via spotify)
         });
 
         self.raumkernel.on("mediaRendererRaumfeldVirtualRemoved", () => {
@@ -64,63 +72,69 @@ RaumfeldRadioPlatform.prototype = {
         }
 
         if (zoneConfiguration.zoneConfig.unassignedRooms !== undefined) {
-            var room = zoneConfiguration.zoneConfig.unassignedRooms[0].room[0].$;
-            this.roomName = room.name;
-            this.log.debug("Found and use unassigned room:", room.name);
-            return this.raumkernel.managerDisposer.zoneManager.connectRoomToZone(room.udn, "").then(() => {
-                return Promise.resolve(room.name);
-            })
-            .then(x => new Promise(resolve => setTimeout(resolve, 2000, x))); // delay
+            var unassignedRooms = zoneConfiguration.zoneConfig.unassignedRooms[0].room;
+            var connectPromises = unassignedRooms.map(room => {
+                this.log.debug("Found and use unassigned room:", room.name);
+                return this.raumkernel.managerDisposer.zoneManager.connectRoomToZone(room.udn, "");
+            });
+            
+            return Promise.allSettled(connectPromises)
+                .then(x => new Promise(resolve => setTimeout(resolve, 2000, x))); // delay
         } else {
-            var room = zoneConfiguration.zoneConfig.zones[0].zone[0].room[0].$;
-            this.roomName = room.name;
-            this.log.debug("Use already assigned room:", room.name);
-            return Promise.resolve(room.name);
+            var zone = zoneConfiguration.zoneConfig.zones[0].zone[0];
+            this.zoneUDN = zone.$.udn;
+            this.log.debug("Use zone", zone.$.udn, "with", zone.room.length, "rooms");
+            return Promise.resolve();
         }
     },
 
     get['virtualMediaRenderer']() {
-        return this.raumkernel.managerDisposer.deviceManager.getVirtualMediaRenderer(this.roomName);
+        return this.raumkernel.managerDisposer.deviceManager.getVirtualMediaRenderer(this.zoneUDN);
     },
 
-    get['mediaRenderer']() {
-        return this.raumkernel.managerDisposer.deviceManager.getMediaRenderer(this.roomName);
+    mediaRenderer: function(roomName) {
+        return this.raumkernel.managerDisposer.deviceManager.getMediaRenderer(roomName);
     },
 
     get['connectedToZone']() {
         var zoneConfiguration = this.raumkernel.managerDisposer.zoneManager.zoneConfiguration;
-        var connected = zoneConfiguration.zoneConfig.unassignedRooms === undefined;
+        var connected = zoneConfiguration.zoneConfig.unassignedRooms === undefined; // TODO
 
         if (connected) {
-            this.roomName = zoneConfiguration.zoneConfig.zones[0].zone[0].$.udn;
+            this.zoneUDN = zoneConfiguration.zoneConfig.zones[0].zone[0].$.udn;
         }
 
         return connected;
     },
 
-    get['powerStateOn']() {
+    powerStateOn: function(roomName) {
         var zoneConfiguration = this.raumkernel.managerDisposer.zoneManager.zoneConfiguration;
-        var powerState = zoneConfiguration.zoneConfig.zones[0].zone[0].room[0].$.powerState;
-        return powerState == "ACTIVE";
+        var rooms = zoneConfiguration.zoneConfig.zones[0].zone[0].room;
+        var room = rooms.filter(r => r.$.name == roomName)[0];
+        return room.$.powerState == "ACTIVE";
     },
 
-    station: function(name) {
-        return this.stations.filter(station => station.name === name)[0];
+    station: function(accessory) {
+        var stationName = accessory.displayName.split(" / ")[0]
+        return this.stations.filter(station => station.name === stationName)[0];
     },
 
-    stationStatus: function(station) { 
+    roomName: function(accessory) {
+        return accessory.displayName.split(" / ")[1];
+    },
+
+    stationStatus: function(station, roomName) { 
         if (!this.connectedToZone) {
-            this.log.debug(`Fialing status for station '${station}': Not connected to zone`)
+            this.log.debug(`Fialing status for station '${station.name}': Not connected to zone`)
             return Promise.resolve(false);
         }
 
-        if (!this.powerStateOn) {
-            this.log.debug(`Failing status for station '${station}': Connector not powered on`)
+        if (!this.powerStateOn(roomName)) {
+            this.log.debug(`Failing status for station '${station.name}': Device not powered on`)
             return Promise.resolve(false);
         }
 
-        var virtualMediaRenderer = this.virtualMediaRenderer;
-        return virtualMediaRenderer.getMediaInfo().then(data => {
+        return this.virtualMediaRenderer.getMediaInfo().then(data => {
             var isPlayingViaApp = data.CurrentURIMetaData.includes("id=" + station.ebrowseID);
             var stationStatus = (data.CurrentURI == station.streamURL || isPlayingViaApp);
             return stationStatus
@@ -132,12 +146,13 @@ RaumfeldRadioPlatform.prototype = {
 
         this.log("Configuring accessory %s", accessory.displayName);
 
-        var station = this.station(accessory.displayName);
+        var station = this.station(accessory);
+        var roomName = this.roomName(accessory);
 
         var switchService = accessory.getService(hap.Service.Switch);
         switchService.getCharacteristic(hap.Characteristic.On)
             .on("get", callback => {
-                self.stationStatus(station).then(status => {
+                self.stationStatus(station, roomName).then(status => {
                     callback(undefined, status);
                 }).catch(error => self.log.warn(error));
             })
@@ -145,35 +160,38 @@ RaumfeldRadioPlatform.prototype = {
                 if (value) {
                     self.connectToRoomIfNeeded()
                     .then(x => {
-                        if (self.powerStateOn) {
+                        if (self.powerStateOn(roomName)) {
                             self.log.debug("Change to new station URI for", station.name);
                             self.setStream(station.streamURL).then(() => {
                                 callback();
                                 self.log.debug("Changed station URI");
                             });
                         } else {
-                            self.log.debug("Turn on connector");
-                            this.mediaRenderer.leaveStandby()
-                            .then(x => new Promise(resolve => setTimeout(resolve, 3000, x))) // delay
-                            .then((_data) => {
-                                self.log.debug("Change to new station URI for", station.name);
-                                return self.setStream(station.streamURL);
-                            })
-                            .then(() => {
-                                callback();
-                                self.log.debug("Changed station URI");
-                            }).catch(error => self.log.warn(error));
+                            self.log.debug("Turn on device");
+                            self.mediaRenderer(roomName)
+                                .leaveStandby()
+                                .then(x => new Promise(resolve => setTimeout(resolve, 3000, x))) // delay
+                                .then((_data) => {
+                                    self.log.debug("Change to new station URI for", station.name);
+                                    return self.setStream(station.streamURL);
+                                })
+                                .then(() => {
+                                    callback();
+                                    self.log.debug("Changed station URI");
+                                }).catch(error => self.log.warn(error));
                         }
                     })
                 } else {
                     callback();
                 }
                 
-                self.onChangeHandler(station.name, value);
+                self.onChangeHandler(station.name, roomName, value);
             });
 
-        this.updateHandlers.push(function(newName) {
-            switchService.getCharacteristic(hap.Characteristic.On).updateValue(station.name === newName);
+        this.updateHandlers.push(function(newStationName) {
+            if (station.name !== newStationName) {
+                switchService.getCharacteristic(hap.Characteristic.On).updateValue(false);
+            }
         });
     
         this.accessories.push(accessory);
@@ -183,23 +201,26 @@ RaumfeldRadioPlatform.prototype = {
         return this.virtualMediaRenderer.loadUri(uri, false, false);
     },
 
-    onChangeHandler: function(newName, newValue) {
+    onChangeHandler: function(newStationName, roomName, value) {
         var self = this;
 
-        if (newValue) {
-            this.updateHandlers.forEach(handler => handler(newName));
+        if (value) {
+            this.updateHandlers.forEach(handler => handler(newStationName));
         } else {
             this.connectToRoomIfNeeded().then(() => {
                 self.log.debug("Turn off connector");
-                self.mediaRenderer.enterManualStandby();
+                self.mediaRenderer(roomName)
+                    .enterManualStandby()
+                    .catch(error => self.log.warn(error));;
             });
         }
     },
 
-    publishAccessory: function(name, onChangeHandler) {
-        var uuid = hap.uuid.generate("homebridge:raumfeld-radio:station-switch:" + name);
+    publishAccessory: function(room, stationName) {
+        var uuid = hap.uuid.generate("homebridge:raumfeld-radio:station:" + stationName + ":" + room.$.udn);
 
         if (this.accessories.filter(accessory => accessory.UUID === uuid).length == 0) {
+            var name = stationName + " / " + room.$.name
             var accessory = new Accessory(name, uuid);
 
             var switchService = new hap.Service.Switch(name);
