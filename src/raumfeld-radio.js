@@ -5,6 +5,14 @@ var path = require("path");
 var PLUGIN_NAME = "homebridge-raumfeld-radio";
 var PLATFORM_NAME = "RaumfeldRadio";
 
+var VOLUME_CONTROL_SUFFIX = " +";
+var VOLUME_LEVEL_MIN = 15;
+var VOLUME_LEVEL_MAX = 50;
+var VOLUME_SUPPORTED_DEVICES = [
+    "Teufel One S",
+    "Teufel One M",
+];
+
 var hap;
 var Accessory;
 
@@ -115,12 +123,31 @@ RaumfeldRadioPlatform.prototype = {
     },
 
     station: function(accessory) {
-        var stationName = accessory.displayName.split(" / ")[0]
+        var stationName = accessory.displayName.split(" / ")[0];
         return this.stations.filter(station => station.name === stationName)[0];
     },
 
     roomName: function(accessory) {
-        return accessory.displayName.split(" / ")[1];
+        var secondPart = accessory.displayName.split(" / ")[1];
+        return secondPart.endsWith(VOLUME_CONTROL_SUFFIX) ? secondPart.slice(0, -2) : secondPart;
+    },
+
+    hasVolumeControl: function(accessory) {
+        var secondPart = accessory.displayName.split(" / ")[1];
+        return secondPart.endsWith(VOLUME_CONTROL_SUFFIX);
+    },
+
+    roomHasVolumeControl: function(room) {
+        var mediaRenderer = this.mediaRenderer(room.$.name);
+        var modelName = mediaRenderer.upnpClient.deviceDescription.modelName;
+        return VOLUME_SUPPORTED_DEVICES.includes(modelName);
+    },
+
+    transformVolume: function(input, inputMin, inputMax, outputMin, outputMax) {
+        var clampedInput = Math.max(inputMin, Math.min(input, inputMax));
+        var slope = (outputMax - outputMin) / (inputMax - inputMin);
+        var output = outputMin + slope * (clampedInput - inputMin);
+        return output;
     },
 
     stationStatus: function(station, roomName) { 
@@ -148,9 +175,11 @@ RaumfeldRadioPlatform.prototype = {
 
         var station = this.station(accessory);
         var roomName = this.roomName(accessory);
+        var hasVolumeControl = this.hasVolumeControl(accessory);
 
-        var switchService = accessory.getService(hap.Service.Switch);
-        switchService.getCharacteristic(hap.Characteristic.On)
+        var service = hasVolumeControl ? accessory.getService(hap.Service.Fan) : accessory.getService(hap.Service.Switch);
+
+        service.getCharacteristic(hap.Characteristic.On)
             .on("get", callback => {
                 self.stationStatus(station, roomName).then(status => {
                     callback(undefined, status);
@@ -188,9 +217,31 @@ RaumfeldRadioPlatform.prototype = {
                 self.onChangeHandler(station.name, roomName, value);
             });
 
+        if (hasVolumeControl) {
+            service.getCharacteristic(hap.Characteristic.RotationSpeed)
+                .on("get", callback => {
+                    self.mediaRenderer(roomName)
+                        .getVolume()
+                        .then(volume => {
+                            var transformedVolume = self.transformVolume(volume, VOLUME_LEVEL_MIN, VOLUME_LEVEL_MAX, 0, 100);
+                            callback(undefined, transformedVolume);
+                        })
+                        .catch(error => self.log.warn(error));
+                })
+                .on("set", (value, callback) => {
+                    var transformedVolume = self.transformVolume(value, 0, 100, VOLUME_LEVEL_MIN, VOLUME_LEVEL_MAX);
+                    self.mediaRenderer(roomName)
+                        .setVolume(transformedVolume)
+                        .then(() => {
+                            callback();
+                        })
+                        .catch(error => self.log.warn(error));
+                });
+        }
+
         this.updateHandlers.push(function(newStationName) {
             if (station.name !== newStationName) {
-                switchService.getCharacteristic(hap.Characteristic.On).updateValue(false);
+                service.getCharacteristic(hap.Characteristic.On).updateValue(false);
             }
         });
     
@@ -220,12 +271,12 @@ RaumfeldRadioPlatform.prototype = {
         var uuid = hap.uuid.generate("homebridge:raumfeld-radio:station:" + stationName + ":" + room.$.udn);
 
         if (this.accessories.filter(accessory => accessory.UUID === uuid).length == 0) {
-            var name = stationName + " / " + room.$.name
+            var suffix = this.roomHasVolumeControl(room) ? VOLUME_CONTROL_SUFFIX : ""
+            var name = stationName + " / " + room.$.name + suffix
             var accessory = new Accessory(name, uuid);
 
-            var switchService = new hap.Service.Switch(name);
-            accessory.addService(switchService);
-
+            var service = this.roomHasVolumeControl(room) ? new hap.Service.Fan(name) : new hap.Service.Switch(name);
+            accessory.addService(service);
             this.configureAccessory(accessory);
     
             accessory.getService(hap.Service.AccessoryInformation)
