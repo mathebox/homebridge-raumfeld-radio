@@ -7,7 +7,7 @@
     ...
     "platforms": [
         {
-            "platform" : "RaumfeldRadioPlatform",
+            "platform" : "RaumfeldRadio",
             "name" : "Teufel",
             "hostIP": "0.0.0.0",
             "stations": [
