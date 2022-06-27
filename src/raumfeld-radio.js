@@ -52,7 +52,10 @@ function RaumfeldRadioPlatform(log, config, api) {
 
             rooms.forEach(room => {
                 self.stations.forEach(station => {
-                    self.publishAccessory(room, station.name);
+                    var excludedRooms = station.excludedRooms ?? [];
+                    if (!excludedRooms.includes(room.$.name)) {
+                        self.publishAccessory(room, station.name);
+                    }
                 });
             });
 
