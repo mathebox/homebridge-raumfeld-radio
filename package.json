@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "description": "Radio Stations for your Raumfeld Connector",
   "main": "src/raumfeld-radio.js",
-  "author": "Max Bothe <mathebox@gmail.com>",
+  "author": "Max Bothe",
   "engines": {
     "homebridge": ">=1.0.0"
   },
   "keywords": [
     "homebridge-plugin"
   ],
-  "license": "ISC",
+  "license": "MIT",
   "files": [
     "LICENSE"
   ],
