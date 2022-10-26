@@ -1,5 +1,9 @@
 # homebridge-raumfeld-radio
 
+### Setup
+
+When setting up the plugin for the first time (configuration of accessories), make sure the Raumfeld host is running (and playing any radio station).
+
 ### Example configuration
 
 ```
