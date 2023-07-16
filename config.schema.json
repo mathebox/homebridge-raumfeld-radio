@@ -1,0 +1,56 @@
+{
+  "pluginAlias": "RaumfeldRadio",
+  "pluginType": "platform",
+  "singular": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "hostIP": {
+        "title": "Host IP",
+        "type": "string",
+        "required": false,
+        "default": "0.0.0.0",
+        "format": "hostname"
+      },
+      "stations": {
+        "title": "Stations",
+        "required": true,
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "title": "Name",
+              "type": "string",
+              "required": true,
+              "default": "RadioEins"
+            },
+            "streamURL": {
+              "title": "Stream URL",
+              "type": "string",
+              "required": true,
+              "default": "https://radioeins.de/stream",
+              "format": "uri"
+            },
+            "ebrowseID": {
+              "title": "ebrowseID",
+              "type": "string",
+              "required": false,
+              "default": "s25111"
+            },
+            "excludedRooms": {
+              "title": "Excluded Rooms",
+              "required": false,
+              "type": "array",
+              "items": {
+                "title": "Room Name",
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

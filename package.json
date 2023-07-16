@@ -1,19 +1,10 @@
 {
+  "private": false,
+  "displayName": "Homebridge Raumfeld Radio",
   "name": "homebridge-raumfeld-radio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Radio Stations for your Raumfeld Connector",
-  "main": "src/raumfeld-radio.js",
-  "author": "Max Bothe",
-  "engines": {
-    "homebridge": ">=1.0.0"
-  },
-  "keywords": [
-    "homebridge-plugin"
-  ],
   "license": "MIT",
-  "files": [
-    "LICENSE"
-  ],
   "repository": {
     "type": "git",
     "url": "git://github.com/mathebox/homebridge-raumfeld-radio.git"
@@ -21,10 +12,35 @@
   "bugs": {
     "url": "http://github.com/mathebox/homebridge-raumfeld-radio/issues"
   },
+  "engines": {
+    "node": ">=14.18.1",
+    "homebridge": ">=1.3.5"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "lint": "eslint src/**.ts --max-warnings=20",
+    "watch": "npm run build && npm link && nodemon",
+    "build": "rimraf ./dist && tsc",
+    "prepublishOnly": "npm run lint && npm run build"
+  },
+  "keywords": [
+    "homebridge-plugin",
+    "raumfeld",
+    "teufel",
+    "radio"
+  ],
   "dependencies": {
     "node-raumkernel": "^1.2.22"
   },
   "devDependencies": {
-    "homebridge": "^1.0.4"
+    "@types/node": "^16.10.9",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@typescript-eslint/parser": "^5.0.0",
+    "eslint": "^8.0.1",
+    "homebridge": "^1.3.5",
+    "nodemon": "^2.0.13",
+    "rimraf": "^3.0.2",
+    "ts-node": "^10.3.0",
+    "typescript": "^4.4.4"
   }
 }

@@ -1,8 +1,8 @@
 # homebridge-raumfeld-radio
 
-### Setup
+## Setup
 
-When setting up the plugin for the first time (configuration of accessories), make sure the Raumfeld host is running (and playing any radio station).
+When setting up the plugin for the first time (configuration of accessories), make sure all Raumfeld devices are running (and optionally playing any radio station).
 
 ### Example configuration
 
@@ -12,7 +12,6 @@ When setting up the plugin for the first time (configuration of accessories), ma
     "platforms": [
         {
             "platform" : "RaumfeldRadio",
-            "name" : "Teufel",
             "hostIP": "0.0.0.0", // optional
             "stations": [
                 {
@@ -33,3 +32,17 @@ When setting up the plugin for the first time (configuration of accessories), ma
     ]
 }
 ```
+
+## Implementation details
+
+### Raumfeld specfic
+
+- The configuration can consist of multiple zones.
+- Each zone can have multiple subzones.
+- The playback is started on a subzone with a virtual renderer.
+- Each subzone can have multiple rooms.
+- In each room multiple renders can be located (actual devices).
+
+### Plugin specific
+
+- An accessory is created for each room. The individual renderers in this room are added as a service.
